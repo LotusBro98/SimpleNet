@@ -2,6 +2,14 @@
 
 namespace sn
 {
+	
+	int parseInt(std::istream& is)
+	{
+		int a;
+		is >> a;
+		return a;
+	}
+
 
 	Dataset::Dataset(int nPoints, int nIn, int nOut)
 	{
@@ -13,35 +21,45 @@ namespace sn
 		this->out = new float[nOut * nPoints];
 	}
 
-	~Dataset()
+	Dataset::~Dataset()
 	{
 		delete [] in;
 		delete [] out;
 	}
 
-	float * getPointIn(int point)
+	float * Dataset::getPointIn(int point)
 	{
 		return in + point * nIn;
 	}
 
-	float * getPointOut(int point)
+	float * Dataset::getPointOut(int point)
 	{
 		return out + point * nOut;
 	}
 
-	int getNPoints() const {
+	float * Dataset::getIn()
+	{
+		return in;
+	}
+
+	float * Dataset::getOut()
+	{
+		return out;
+	}
+
+	int Dataset::getNPoints() const {
 		return nPoints;
 	}
 
-	int getNIn() const {
+	int Dataset::getNIn() const {
 		return nIn;
 	}
 
-	int getNOut() const {
+	int Dataset::getNOut() const {
 		return nOut;
 	}
 
-	explicit Dataset(std::istream& is)
+	Dataset::Dataset(std::istream& is)
 	{
 		is >> this->nPoints;
 		is >> this->nIn;
@@ -61,13 +79,13 @@ namespace sn
 		}
 	}
 
-	explicit Dataset(Dataset * dataset) : Dataset(dataset->nPoints, dataset->nIn, dataset->nOut)
+	Dataset::Dataset(Dataset * dataset) : Dataset(dataset->nPoints, dataset->nIn, dataset->nOut)
 	{
 		std::copy(dataset->in, dataset->in + dataset->nIn * dataset->nPoints, this->in);
 		std::copy(dataset->out, dataset->out + dataset->nOut * dataset->nPoints, this->out);
 	}
 
-	friend std::ostream& operator << (std::ostream& os, Dataset * ds)
+	std::ostream& operator << (std::ostream& os, Dataset * ds)
 	{
 		os << ds->nPoints << " " << ds->nIn << " " << ds->nOut << std::endl;
 

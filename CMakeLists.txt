@@ -7,7 +7,19 @@ include_directories( ${OpenCV_INCLUDE_DIRS} .)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(simplenet
-        main.cpp)
+add_library(simplenet SHARED
+	./src/Layer.cpp ./src/Net.cpp ./src/Dataset.cpp ./src/funcs.cpp)
 
-target_link_libraries( simplenet ${OpenCV_LIBS} )
+add_executable(train
+	./src/train.cpp)
+
+add_executable(evaluate
+	./src/evaluate.cpp)
+
+target_link_libraries( train simplenet pthread)#${OpenCV_LIBS} )
+target_link_libraries( evaluate simplenet pthread ${OpenCV_LIBS} )
+
+install( TARGETS simplenet train evaluate
+           LIBRARY DESTINATION lib/
+           RUNTIME DESTINATION bin/
+         )
