@@ -10,6 +10,13 @@
 
 namespace sn
 {
+	
+	float sigmoid(float x)
+	{
+		return 1 / (1 + std::exp(-x));
+	}
+
+
     class Layer
     {
     public:
@@ -25,7 +32,9 @@ namespace sn
 
             this->weights = new float[(nIn + 1) * nOut];
             for (int i = 0; i < nOut * (nIn + 1); i++)
-                weights[i] = (float) std::rand() / RAND_MAX;
+                weights[i] = ((float) std::rand() / RAND_MAX - 0.5) / 0.5;
+
+			//std::cout << this;
         }
 
         ~Layer()
@@ -34,10 +43,25 @@ namespace sn
             delete [] out;
         }
 
-        Layer(Layer * prev, int nOut) : Layer(prev->nIn, nOut, prev->activation)
+        Layer(Layer * prev, int nOut) : Layer(prev->nOut, nOut, prev->activation)
         {
             this->in = prev->out;
         }
+
+		Layer(std::istream& is, float (*activation)(float x))
+		{
+			is >> nIn;
+			is >> nOut;
+			out = new float[nOut];
+            in = nullptr;
+
+			this->activation = activation;
+
+            weights = new float[(nIn + 1) * nOut];
+            for (int i = 0; i < nOut * (nIn + 1); i++)
+				is >> weights[i];
+
+		}
 
         void setInput(float * in)
         {
@@ -78,6 +102,18 @@ namespace sn
         int getNOut() const {
             return nOut;
         }
+
+		friend std::ostream& operator << (std::ostream& os, Layer * layer)
+		{
+			os << layer->nIn << " " << layer->nOut << std::endl;
+			for (int iOut = 0; iOut < layer->nOut; iOut++)
+			{
+				for (int iIn = 0; iIn < layer->nIn + 1; iIn++)
+					os << layer->weight(iOut, iIn) << " ";
+				os << std::endl;
+			}
+			return os;
+		}
 
     private:
         float (*activation)(float x);
@@ -217,8 +253,8 @@ namespace sn
 
     void optimizeWeightNewton(float & weight, float L, float dw, float dL)
     {
-        const float maxDw = 0.1;
-        const float speed = 0.5;
+        const float maxDw = 0.07;
+        const float speed = 1;
 
         float Dw = - speed * L * dw / dL;
 
@@ -245,9 +281,9 @@ namespace sn
     {
     public:
         Net(int nIn, int nOut, int nHiddenLayers, int nNeurons[],
-                float (*activation)(float x) = std::tanh,
+                float (*activation)(float x) = sn::sigmoid,
                 float (*norm)(Dataset * prediction, Dataset * experiment) = sqrDiffNorm,
-                void (*optimizeWeight)(float & weight, float L, float dw, float dL) = optimizeWeightGradient)
+                void (*optimizeWeight)(float & weight, float L, float dw, float dL) = optimizeWeightNewton)
         {
             this->nLayers = nHiddenLayers + 1;
             layers = new Layer*[nLayers];
@@ -267,12 +303,41 @@ namespace sn
             this->optimizeWeight = optimizeWeight;
         }
 
+		Net(std::istream& is, 
+				float (*activation)(float x) = sn::sigmoid,
+                float (*norm)(Dataset * prediction, Dataset * experiment) = sqrDiffNorm,
+                void (*optimizeWeight)(float & weight, float L, float dw, float dL) = optimizeWeightGradient)
+		{
+			is >> this->nLayers;
+			layers = new Layer*[nLayers];
+
+			layers[0] = new Layer(is, activation);
+			for (int i = 1; i < nLayers; i++)
+			{
+				layers[i] = new Layer(is, activation);
+				layers[i]->setInput(layers[i - 1]->getOut());
+			}
+
+            this->norm = norm;
+            this->optimizeWeight = optimizeWeight;
+		}
+
         ~Net()
         {
             for (int i = 0; i < nLayers; i++)
                 delete layers[i];
             delete [] layers;
-        }
+		}
+
+		friend std::ostream& operator << (std::ostream& os, Net* net)
+		{
+			os << net->nLayers <<std::endl;
+
+			for (int i = 0; i < net->nLayers; i++)
+				os << net->layers[i];
+
+			return os;
+		}
 
         int getNIn()
         {
@@ -345,11 +410,12 @@ namespace sn
 
             delete calcBuffer;
 
+			//std::cout << this;
+
             return L;
         }
 
-
-        void showDistribution(float xMin, float xMax, int nX, float yMin, float yMax, int nY, int sizeX, int sizeY, Dataset * dataset)
+		void showDistribution(float xMin, float xMax, int nX, float yMin, float yMax, int nY, int sizeX, int sizeY, Dataset * dataset)
         {
             if (this->getNIn() != 2 || this->getNOut() != 1)
                 return;
@@ -362,7 +428,7 @@ namespace sn
                     float y = yMin + (nY - i) * (yMax - yMin) / nY;
                     float xx[2] = {x, y};
                     float p = *(this->process(xx));
-                    p = 0.5 * (1 + p);
+                    //p = 0.5 * (1 + p);
                     M0.at<cv::Vec3b>(i, j) = cv::Vec3b::all(p * 255);
                 }
 
@@ -386,7 +452,7 @@ namespace sn
 
             cv::imshow("Distribution", M);
 
-            cv::waitKey(1);
+            //cv::waitKey(1);
         }
 
     private:
@@ -398,21 +464,40 @@ namespace sn
     };
 }
 
-
-
-
 int main()
 {
-    std::ifstream file("../dataset.txt");
+    std::ifstream file("../circles.txt");
 
     sn::Dataset * dataset = new sn::Dataset(file);
 
-    sn::Net * net = new sn::Net(2, 1, 1, new int[1] {2}, std::tanh, sn::sqrDiffNorm, sn::optimizeWeightGradient);
+	std::srand(std::time(NULL));
 
-    for (int i = 0; i < 400; i++) {
-        std::cout << net->trainEpoch(dataset) << std::endl;
-        net->showDistribution(-1, 1, 50, -1, 1, 50, 500, 500, dataset);
+	/*
+    sn::Net * net = new sn::Net(2, 1, 1, new int[1] {40}, sn::sigmoid, sn::sqrDiffNorm, sn::optimizeWeightNewton);
+
+	float L = 1;
+	int i = 0;
+
+    while (L > 0.01) {
+        L = net->trainEpoch(dataset);
+		std::cerr << L << std::endl;
+		//net->showDistribution(-1, 1, 50, -1, 1, 50, 500, 500, dataset);
+		//cv::waitKey(1);
+		i++;
     }
+    
+	std::cerr << "--------------- " << i << " ---------------" << std::endl;
+	*/
+
+	file.close();
+	file.open("net.txt");
+
+	auto net = new sn::Net(file);
+
+	net->showDistribution(-1, 1, 50, -1, 1, 50, 500, 500, dataset);
+	cv::waitKey();
+
+	std::cout << net;
 
     return 0;
 }
